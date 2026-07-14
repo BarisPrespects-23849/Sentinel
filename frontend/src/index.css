@@ -1,0 +1,155 @@
+@import "tailwindcss";
+
+/* SENTINEL design tokens -- see design rationale in the Milestone 8 notes.
+   Philosophy (from industrial HMI practice, ISA-101): color is reserved for
+   abnormality. Normal state renders in muted steel; amber/orange/red appear
+   only as alarm semantics. */
+@theme {
+  --color-bg: #0b0e13;
+  --color-surface: #12161e;
+  --color-panel: #171c26;
+  --color-seam: #232a36;
+  --color-ink: #e8edf4;
+  --color-muted: #8b95a5;
+  --color-faint: #5c6575;
+
+  /* Alarm scale. MEDIUM is #facc15 (not the darker #eab308): validated for
+     deuteranopia separation from HIGH's orange (deltaE 20.5 vs 11.7). */
+  --color-normal: #6b7686;
+  --color-warn: #facc15;
+  --color-high: #f97316;
+  --color-critical: #ef4444;
+
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+/* Thin dark scrollbars so panel overflow doesn't break the control-room
+   surface with a bright default scrollbar. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-seam) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-seam);
+  border-radius: 4px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* What-if sliders: steel track with a filled portion set via --fill.
+   Range inputs need vendor pseudo-elements, so plain CSS beats utilities. */
+.wif-slider {
+  appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--color-muted) var(--fill, 0%),
+    var(--color-seam) var(--fill, 0%)
+  );
+  outline: none;
+}
+.wif-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-ink);
+  border: 3px solid var(--color-bg);
+  cursor: grab;
+}
+.wif-slider::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-ink);
+  border: 3px solid var(--color-bg);
+  cursor: grab;
+}
+.wif-slider:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Briefing chart: lines draw in once on mount, then the gap region fades
+   in. pathLength=1 on the SVG lines makes dasharray units path-relative. */
+@keyframes line-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+.line-draw {
+  stroke-dasharray: 1;
+  animation: line-draw 1.4s ease-out both;
+}
+@keyframes gap-fade {
+  from {
+    opacity: 0;
+  }
+}
+.gap-fade {
+  animation: gap-fade 0.8s ease-out 1.2s backwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .line-draw,
+  .gap-fade {
+    animation: none;
+  }
+}
+
+/* What-if compound banner: one hard flash at the moment of detection,
+   then it holds a steady critical state. Deliberately a single, short,
+   attention-grabbing event -- not a looping animation. */
+@keyframes compound-flash {
+  0% {
+    background-color: color-mix(in srgb, var(--color-critical) 45%, transparent);
+  }
+  100% {
+    background-color: color-mix(in srgb, var(--color-critical) 10%, transparent);
+  }
+}
+.compound-flash {
+  animation: compound-flash 0.9s ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .compound-flash {
+    animation: none;
+    background-color: color-mix(in srgb, var(--color-critical) 10%, transparent);
+  }
+}
+
+/* Alarm pulse for CRITICAL zones only -- the one moving thing on the page. */
+@keyframes alarm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.alarm-pulse {
+  animation: alarm-pulse 1.2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .alarm-pulse {
+    animation: none;
+  }
+}

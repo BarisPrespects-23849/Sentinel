@@ -1,0 +1,9 @@
+# Keep the build context small and force clean in-image builds of the
+# artifacts the Dockerfile regenerates (ML model, RAG index).
+venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+tests/
+app/risk/model.joblib
+app/compliance/chroma_data/

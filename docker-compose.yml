@@ -1,0 +1,100 @@
+services:
+  db:
+    # timescale/timescaledb-ha bundles TimescaleDB *and* PostGIS compiled
+    # against the same Postgres build, so both extensions load correctly.
+    # (A plain timescaledb image + `apk add postgis` looks simpler but
+    # silently fails: Alpine's postgis package targets Alpine's own
+    # Postgres package, not TimescaleDB's separately-built binary.)
+    image: timescale/timescaledb-ha:pg16
+    container_name: sentinel-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - sentinel_db_data:/home/postgres/pgdata/data
+      - ./backend/db/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: sentinel-mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./backend/mqtt/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  # --- Application services (all built from backend/Dockerfile) ---------
+  # Inside the compose network, services reach each other by service name
+  # (db, mqtt) on INTERNAL ports -- the 55432 host remap only matters for
+  # tools running on the host (psql, pytest, a locally-run uvicorn).
+
+  api:
+    build: ./backend
+    container_name: sentinel-api
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MQTT_HOST: mqtt
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    ports:
+      - "8000:8000"
+    # Health is observable (docker ps shows "healthy") and lets dependents
+    # wait for a truly-ready API on restart -- recovery-ordering insurance,
+    # not a fix for Docker-daemon crashes. python stdlib avoids needing curl
+    # in the slim image; start_period covers the ML-model + RAG-index load.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+  simulator:
+    build: ./backend
+    container_name: sentinel-simulator
+    restart: unless-stopped
+    command: python -m app.simulator.publisher
+    environment:
+      MQTT_HOST: mqtt
+    depends_on:
+      mqtt:
+        condition: service_started
+
+  ingest:
+    build: ./backend
+    container_name: sentinel-ingest
+    restart: unless-stopped
+    command: python -m app.ingest.subscriber
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      MQTT_HOST: mqtt
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+
+volumes:
+  sentinel_db_data:
