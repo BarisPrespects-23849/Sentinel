@@ -262,3 +262,6 @@ UPDATE permits SET valid_from = now() - interval '2 hours',
                    valid_until = now() + interval '4 hours'
 WHERE permit_type = 'hot_work' AND zone_id = 1;
 ```
+### Drive Video Explanation
+https://drive.google.com/file/d/1-ABTwbegje3B3S-vu1d5gUnowQK-241b/view?usp=sharing
+
